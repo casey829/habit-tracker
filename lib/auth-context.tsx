@@ -7,42 +7,40 @@ type AuthContextType = {
   isLoadingUser?: boolean;
   signUp: (email: string, password: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // Initialize user state
+  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(
+    null
+  );
 
- // Initialize user state
-const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null)
+  // Initialize loading state
+  const [isLoadingUser, setIsLoadingUser] = useState<boolean>(true);
 
+  // Fetch user on mount
+  useEffect(() => {
+    getUser();
+  }, []);
 
-// Initialize loading state
-const [isLoadingUser, setIsLoadingUser] = useState<boolean>(true);
-
-// Fetch user on mount
-useEffect(() => {
-    getUser()
-}, []);
-
-
-const getUser = async () => {
+  const getUser = async () => {
     try {
-       const session = await account.get();
-       setUser(session) 
+      const session = await account.get();
+      setUser(session);
     } catch (error) {
-        setUser(null);
-        if (error instanceof Error) {
-          console.error("Error fetching user:", error.message);
-        } else {
-          console.error("An unexpected error occurred while fetching user.");
-        }   
+      setUser(null);
+      if (error instanceof Error) {
+        console.error("Error fetching user:", error.message);
+      } else {
+        console.error("An unexpected error occurred while fetching user.");
+      }
+    } finally {
+      setIsLoadingUser(false);
     }
-    finally{
-        setIsLoadingUser(false);
-    }
-}
-
+  };
 
   const signUp = async (email: string, password: string) => {
     try {
@@ -59,7 +57,7 @@ const getUser = async () => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await account.createEmailPasswordSession( email, password);
+      await account.createEmailPasswordSession(email, password);
       return null; // Sign up successful, no error message
     } catch (error) {
       if (error instanceof Error) {
@@ -69,18 +67,26 @@ const getUser = async () => {
     }
   };
 
+  const signOut = async () => {
+    try {
+      await account.deleteSession("current");
+      setUser(null);
+    } catch (error) {
+        console.error("Error signing out:", error);
+    }
+  };
 
   return (
-     <AuthContext.Provider value={{ user, isLoadingUser, signUp, signIn }}>
+    <AuthContext.Provider value={{ user, isLoadingUser, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error("useAuth must be used within an AuthProvider");
-    }
-    return context;
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

@@ -1,29 +1,32 @@
-import { AuthProvider } from "@/lib/auth-context";
-import { Stack, useRouter } from "expo-router";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect, useState } from "react";
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [isNavigationReady, setIsNavigationReady] = useState(false);
-  const isAuth = false; // Replace with your authentication logic
+  //const [isNavigationReady, setIsNavigationReady] = useState(false);
+  const { user, isLoadingUser} = useAuth();
+  const segments = useSegments();
+
+  // useEffect(() => {
+
+  //   const timer = setTimeout(() => {
+  //     setIsNavigationReady(true);
+  //   }, 100)
+
+  //   return () => clearTimeout(timer);
+  // }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsNavigationReady(true);
-    }, 100)
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (isNavigationReady && !isAuth) {
+    const isAuthRoute = segments[0]  === "auth";
+    if ( !user && !isAuthRoute && !isLoadingUser )  {
       router.replace("/auth");
+    }else if (user && isAuthRoute && !isLoadingUser) {
+      router.replace("/");
     }
-  }, [ isAuth, router, isNavigationReady ]);
+  }, [ user, segments]);
 
-  if (!isNavigationReady) {
-    return null; // or a loading spinner
-  }
+  
 
   return <>{children}</>; 
 

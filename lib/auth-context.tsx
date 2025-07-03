@@ -72,12 +72,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await account.deleteSession("current");
       setUser(null);
     } catch (error) {
-        console.error("Error signing out:", error);
+      console.error("Error signing out:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoadingUser, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ user, isLoadingUser, signUp, signIn, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

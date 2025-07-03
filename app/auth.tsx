@@ -39,7 +39,7 @@ const AuthScreen = () => {
         return;
       }
 
-      router.replace("/(tabs)/login");
+      router.replace("/(tabs)/streak");
     }
   };
 

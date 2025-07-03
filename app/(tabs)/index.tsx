@@ -1,55 +1,119 @@
-//import { Link } from "expo-router";
-import { client, DATABASE_ID, databases, HABITS_COLLECTION_ID } from "@/lib/appwrite";
+import {
+  client,
+  DATABASE_ID,
+  databases,
+  HABITS_COLLECTION_ID,
+  RealtimeResponse,
+} from "@/lib/appwrite";
 import { useAuth } from "@/lib/auth-context";
 import { Habit } from "@/types/database.type";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useEffect, useState } from "react";
-import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useEffect, useState } from "react";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Query } from "react-native-appwrite";
-import { Button, Text, Card, Surface, IconButton } from "react-native-paper";
+import { Card, IconButton, Surface, Text } from "react-native-paper";
 
 export default function Index() {
   const { signOut, user } = useAuth();
 
-  const [habits, setHabits] = useState<Habit[]>();
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch habits when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchHabits();
+      }
+    }, [user])
+  );
 
   useEffect(() => {
-    fetchHabits();
+    if (user) {
+      const channel = `databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`;
 
-    const habitsSubscription = client.subscribe(`
-      databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`,
-      () => {
-        
-      }
-    )
+      const habitsSubscription = client.subscribe(
+        channel,
+        (response: RealtimeResponse) => {
+          //console.log("Realtime event received:", response.events);
+          
+          // Handle create events
+          if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.create"
+            )
+          ) {
+            //console.log("New habit created, fetching habits...");
+            fetchHabits();
+          } 
+          // Handle update events
+          else if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.update"
+            )
+          ) {
+            //console.log("Habit updated, fetching habits...");
+            fetchHabits();
+          }
+          // Handle delete events
+          else if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.delete"
+            )
+          ) {
+            //console.log("Habit deleted, fetching habits...");
+            fetchHabits();
+          }
+        }
+      );
+
+      // Initial fetch
+      fetchHabits();
+
+      return () => {
+        habitsSubscription();
+      };
+    }
   }, [user]);
 
   const fetchHabits = async () => {
+    if (!user) return;
+    
     try {
+      setLoading(true);
       const response = await databases.listDocuments(
         DATABASE_ID!,
         HABITS_COLLECTION_ID!,
-        [Query.equal("user_id", user?.$id ?? "")]
+        [Query.equal("user_id", user.$id)]
       );
-      //console.log(response.documents);
+      //console.log("Fetched habits:", response.documents.length);
       setHabits(response.documents as Habit[]);
-    } catch (error) {}
+    } catch (error) {
+      //console.error("Error fetching habits:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getFrequencyColor = (frequency: string) => {
     switch (frequency) {
-      case 'daily': return '#4caf50';
-      case 'weekly': return '#2196f3';
-      case 'monthly': return '#ff9800';
-      default: return '#757575';
+      case "daily":
+        return "#4caf50";
+      case "weekly":
+        return "#2196f3";
+      case "monthly":
+        return "#ff9800";
+      default:
+        return "#757575";
     }
   };
 
   const getStreakIcon = (streakCount: number) => {
-    if (streakCount >= 30) return 'trophy';
-    if (streakCount >= 7) return 'fire';
-    if (streakCount >= 3) return 'star';
-    return 'checkbox-marked-circle';
+    if (streakCount >= 30) return "trophy";
+    if (streakCount >= 7) return "fire";
+    if (streakCount >= 3) return "star";
+    return "checkbox-marked-circle";
   };
 
   return (
@@ -71,17 +135,17 @@ export default function Index() {
       </Surface>
 
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {habits?.length === 0 ? (
+        {habits?.length === 0 && !loading ? (
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons 
-              name="format-list-checks" 
-              size={80} 
-              color="#e0e0e0" 
+            <MaterialCommunityIcons
+              name="format-list-checks"
+              size={80}
+              color="#e0e0e0"
             />
             <Text variant="headlineSmall" style={styles.emptyTitle}>
               No Habits Yet
@@ -90,46 +154,55 @@ export default function Index() {
               Create your first habit to get started on your journey!
             </Text>
           </View>
+        ) : loading ? (
+          <View style={styles.loadingState}>
+            <Text variant="bodyMedium" style={styles.loadingText}>
+              Loading habits...
+            </Text>
+          </View>
         ) : (
           <View style={styles.habitsContainer}>
             {habits?.map((habit, key) => (
-              <Card key={key} style={styles.habitCard} elevation={2}>
+              <Card key={habit.$id || key} style={styles.habitCard} elevation={2}>
                 <Card.Content style={styles.cardContent}>
                   <View style={styles.habitHeader}>
                     <Text variant="titleLarge" style={styles.habitTitle}>
                       {habit.title}
                     </Text>
                     <TouchableOpacity style={styles.completeButton}>
-                      <MaterialCommunityIcons 
-                        name="check-circle" 
-                        size={28} 
-                        color="#4caf50" 
+                      <MaterialCommunityIcons
+                        name="check-circle"
+                        size={28}
+                        color="#4caf50"
                       />
                     </TouchableOpacity>
                   </View>
-                  
+
                   <Text variant="bodyMedium" style={styles.habitDescription}>
                     {habit.description}
                   </Text>
-                  
+
                   <View style={styles.habitStats}>
                     <View style={styles.statItem}>
-                      <MaterialCommunityIcons 
-                        name={"fire"} 
-                        size={20} 
-                        color="#ff9800" 
+                      <MaterialCommunityIcons
+                        name={getStreakIcon(habit.streak_count)}
+                        size={20}
+                        color="#ff9800"
                       />
                       <Text variant="bodySmall" style={styles.statText}>
                         {habit.streak_count} day streak
                       </Text>
                     </View>
-                    
-                    <View style={[
-                      styles.frequencyBadge, 
-                      { backgroundColor: getFrequencyColor(habit.frequency) }
-                    ]}>
+
+                    <View
+                      style={[
+                        styles.frequencyBadge,
+                        { backgroundColor: getFrequencyColor(habit.frequency) },
+                      ]}
+                    >
                       <Text variant="bodySmall" style={styles.frequencyText}>
-                        {habit.frequency.charAt(0).toUpperCase() + habit.frequency.slice(1)}
+                        {habit.frequency.charAt(0).toUpperCase() +
+                          habit.frequency.slice(1)}
                       </Text>
                     </View>
                   </View>
@@ -190,6 +263,16 @@ const styles = StyleSheet.create({
     color: "#9e9e9e",
     textAlign: "center",
     lineHeight: 20,
+  },
+  loadingState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+  },
+  loadingText: {
+    color: "#757575",
+    textAlign: "center",
   },
   habitsContainer: {
     gap: 16,
